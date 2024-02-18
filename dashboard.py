@@ -16,22 +16,22 @@ with open("/home/alber/PycharmProjects/tfg/spain-provinces.geojson") as file:
 
 def make_map_df(var, df):
 	listProvinces = []
-	# print(len(provinces['features']))
+
 	for i in range(0, len(provinces['features'])):
 		listProvinces.append(provinces['features'][i]['properties']['name'])
 
-	# print(listProvinces)
+
 	list1 = []
 	for i in range(len(df)):
 		list1.append(df.loc[i, 'region'])
 
-	print(list1)
+
 	c = collections.Counter(list1)
-	print(c)
+
 	regions = []
 	for region in c.keys():
 		regions.append(str(region).capitalize())
-	print(regions)
+
 	executions = []
 	emissions = []
 	for prov in listProvinces:
@@ -53,24 +53,21 @@ def make_map_df(var, df):
 						totalemissions = totalemissions + float(df.loc[i, 'emissions'])
 
 				emissions.append(totalemissions)
-	# print(executions)
+
 	df2 = pd.DataFrame()
 	df2['region'] = listProvinces
 	if var == 'emissions':
 		df2['emissions'] = emissions
 	else:
 		df2['executions'] = executions
-	# print(emissions)
-	# print(df2.to_string())
+
 	return df2
 
 
 def make_choropleth(var, df):
 	dfMap = make_map_df(var, df)
-	# print(dfMap)
 	column = ''
 	scale = ''
-	# print('choropleth: ' + var)
 	if var == 'emissions':
 		column = 'emissions'
 		scale = 'YlOrRd'
@@ -97,11 +94,26 @@ def approximate_numbers(number):
 		if '.' in number:
 			return str(round(float(number), 4))
 		else:
-			return str(number)
+			return number
 
 
-def serve_layout():
-	return dbc.Container([
+graphs_labels = {
+			'cpu_power': 'CPU POWER (W)',
+			'cpu_energy': 'CPU ENERGY (kWh)',
+			'gpu_power': 'GPU POWER (W)',
+			'gpu_energy': 'GPU ENERGY (kWh)',
+			'ram_power': 'RAM POWER (W)',
+			'ram_energy': 'RAM ENERGY (kWh)',
+			'timestamp': 'Date'
+		}
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY],
+				meta_tags=[{'name': 'viewport',
+				'content': 'width=device-width, initial-scale=1.0'}])
+
+
+
+app.layout = dbc.Container([
 		dbc.Row([
 			dbc.Col(html.H1('Emissions Dashboard', className='text-center text-success mb-4'))
 		]),
@@ -136,34 +148,11 @@ def serve_layout():
 
 
 
-graphs_labels = {
-			'cpu_power': 'CPU POWER (W)',
-			'cpu_energy': 'CPU ENERGY (kWh)',
-			'gpu_power': 'GPU POWER (W)',
-			'gpu_energy': 'GPU ENERGY (kWh)',
-			'ram_power': 'RAM POWER (W)',
-			'ram_energy': 'RAM ENERGY (kWh)',
-			'timestamp': 'Date'
-		}
-
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY],
-				meta_tags=[{'name': 'viewport',
-				'content': 'width=device-width, initial-scale=1.0'}]) #para layout responsive
-				# https://www.youtube.com/watch?v=0mfIK8zxUds&list=PLh3I780jNsiS3xlk-eLU2dpW3U-wCq4LW&index=1&t=1886s&ab_channel=CharmingData
-				# https://dash-bootstrap-components.opensource.faculty.ai/docs/faq/
-
-
-
-
-app.layout = serve_layout
-
-
 @callback(
-	Output('load-df', 'data'),
-	Input('to-load-df', 'n_clicks')
+	Output(component_id='load-df', component_property='data'),
+	Input(component_id='to-load-df', component_property='n_clicks')
 )
 def clean_data(n_clicks):
-	print("cargo dataset")
 	df = pd.read_csv('/home/alber/PycharmProjects/tfg/emissions.csv')
 	return df.to_json()
 
@@ -193,19 +182,8 @@ def update_info(clickData, json_data):
 	if clickData is not None:
 		bytes_data = json_data.encode('utf-8')
 		df = pd.read_json(BytesIO(bytes_data))
-		print(clickData)
 		location = clickData['points'][0]['location']
-		print('location', location)
 
-		'''
-		list = df.loc[df['region'] == location.lower()]
-
-		for i in list:
-			print(i['timestamp'])
-		print(list)
-		timestamp = list['timestamp']
-		print(timestamp)
-		'''
 		for i in range(len(df)-1, -1, -1):
 			prov = location.lower()
 			if '/' in prov:
@@ -221,7 +199,7 @@ def update_info(clickData, json_data):
 						   html.H6('GPU model: {}'.format(df.loc[i, 'gpu_model'])),
 						   html.H6('RAM size: {} Gb'.format(df.loc[i, 'ram_total_size'])),
 						   html.H6('CPU model: {}'.format(df.loc[i, 'cpu_model'])),
-						   html.H6('Emissions: {} kg'.format(df.loc[i, 'emissions']))]
+						   html.H6('Emissions: {} kg'.format(approximate_numbers(df.loc[i, 'emissions'])))]
 
 		return [html.H4('No executions in {}'.format(location))]
 
@@ -238,8 +216,6 @@ def update_content_from_tabs(active_tab, json_data):
 	if active_tab == 'Summary':
 		power_used = approximate_numbers(df['cpu_power'].sum() + df['gpu_power'].sum() + df['ram_power'].sum())
 		energy_used = approximate_numbers(df['energy_consumed'].sum())
-		print('AMM ' + str(df['energy_consumed'].sum()))
-		print('AMM ' + energy_used)
 		total_emissions = approximate_numbers(df['emissions'].sum())
 		return [dbc.Col([dbc.Card(
 				dbc.CardBody([
@@ -252,7 +228,7 @@ def update_content_from_tabs(active_tab, json_data):
 					html.H3('Total ENERGY used: '.format(active_tab)),
 					html.H4(energy_used + ' kWh'),
 				])
-			), ],style={'margin-top': '12px'}),
+			), ], style={'margin-top': '12px'}),
 			dbc.Col([dbc.Card(
 				dbc.CardBody([
 					html.H3('Total emissions generated: '),
